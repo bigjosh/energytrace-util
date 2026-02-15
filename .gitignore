@@ -1,4 +1,10 @@
 comm.log
 energytrace
+energytrace.exe
 energytrace.log
+build/
+*.lib
+*.obj
+*.o
+mspds-src/
 

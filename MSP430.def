@@ -1,0 +1,13 @@
+LIBRARY MSP430.dll
+EXPORTS
+    MSP430_Initialize
+    MSP430_VCC
+    MSP430_LoadDeviceDb
+    MSP430_OpenDevice
+    MSP430_GetFoundDevice
+    MSP430_Run
+    MSP430_Close
+    MSP430_Configure
+    MSP430_EnableEnergyTrace
+    MSP430_ResetEnergyTrace
+    MSP430_DisableEnergyTrace

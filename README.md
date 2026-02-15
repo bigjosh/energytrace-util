@@ -28,19 +28,47 @@ filtering the energy measurements leads to more accurate readings than
 the current measurement itself.
 
 # Dependencies
-You'll need MSP430 debug stack (libmsp430.so) and the usual 
-things like make and gcc. Unfortunately, building the MSP430 debug 
-stack is a bit difficult at this time since it's missing some 
-`#include` and triggers a
+You'll need MSP430 debug stack and the usual things like make and gcc
+(or CMake). Unfortunately, building the MSP430 debug stack is a bit
+difficult at this time since it's missing some `#include` and triggers a
 [compiler bug](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=71092).
-Using Arch Linux? You're lucky, I've created a PKGBUILD and patches for 
+Using Arch Linux? You're lucky, I've created a PKGBUILD and patches for
 easy installation: [aur-mspds](https://github.com/carrotIndustries/aur-mspds)
 At the time of writing, the AUR package mspds is broken.
 
 # How do I build and run?
+
+## Linux
 ```
 $ make
 $ ./energytrace <measurement duration in seconds> > energytrace.log
+```
+
+## Windows
+
+### Pre-built binary
+Download `energytrace.exe` from the
+[Releases](https://github.com/bigjosh/energytrace-util/releases) page.
+
+You will need **MSP430.DLL** from TI's
+[MSP Debug Stack](https://www.ti.com/tool/MSPDS) (also included with
+Code Composer Studio). Place `MSP430.DLL` in the same directory as
+`energytrace.exe` or on your system PATH.
+
+```
+> energytrace.exe <measurement duration in seconds> > energytrace.log
+```
+
+### Building from source on Windows
+Using CMake with Visual Studio:
+```
+> cmake -B build -DMSP430_INCLUDE_DIR="C:\path\to\msp430\include" -DMSP430_LIBRARY="C:\path\to\MSP430.lib"
+> cmake --build build --config Release
+```
+
+Or with the Makefile using MinGW:
+```
+> make windows MSP430_WIN_INCLUDE=C:\path\to\msp430\include
 ```
 
 Use you favourite tool for visualizing and processing the recorded data.
