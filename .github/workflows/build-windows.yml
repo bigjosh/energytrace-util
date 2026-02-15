@@ -16,10 +16,8 @@ jobs:
         include:
           - arch: x86
             cmake_arch: Win32
-            lib_machine: x86
           - arch: x64
             cmake_arch: x64
-            lib_machine: x64
     steps:
       - uses: actions/checkout@v4
 
@@ -28,13 +26,9 @@ jobs:
         with:
           arch: ${{ matrix.arch }}
 
-      - name: Generate import library from .def file
-        run: lib /def:MSP430.def /out:MSP430.lib /machine:${{ matrix.lib_machine }}
-        shell: cmd
-
       - name: Build with CMake (MSVC)
         run: |
-          cmake -B build -A ${{ matrix.cmake_arch }} -DMSP430_LIBRARY="${{ github.workspace }}\MSP430.lib"
+          cmake -B build -A ${{ matrix.cmake_arch }}
           cmake --build build --config Release
         shell: cmd
 
