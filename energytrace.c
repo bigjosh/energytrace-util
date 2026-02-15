@@ -6,6 +6,16 @@
 
 #ifdef _WIN32
 #include <windows.h>
+/*
+ * Load MSP430.DLL at runtime via LoadLibrary/GetProcAddress.
+ * This avoids needing an import library and sidesteps the 32-bit
+ * __stdcall name decoration mismatch (the DLL exports undecorated
+ * names like "MSP430_Run", but 32-bit MSVC expects "_MSP430_Run@8").
+ * GetProcAddress always uses undecorated names, so it just works.
+ */
+#include <DLL430_SYMBOL.h>
+#undef DLL430_SYMBOL
+#define DLL430_SYMBOL  /* suppress __declspec(dllimport) */
 #else
 #include <unistd.h>
 #endif
@@ -13,6 +23,80 @@
 #include <MSP430.h>
 #include <MSP430_EnergyTrace.h>
 #include <MSP430_Debug.h>
+
+#ifdef _WIN32
+/* Function pointer types */
+typedef STATUS_T (WINAPI *pfn_MSP430_Initialize)(const char*, int32_t*);
+typedef STATUS_T (WINAPI *pfn_MSP430_Close)(int32_t);
+typedef STATUS_T (WINAPI *pfn_MSP430_VCC)(int32_t);
+typedef STATUS_T (WINAPI *pfn_MSP430_OpenDevice)(const char*, const char*, int32_t, int32_t, int32_t);
+typedef STATUS_T (WINAPI *pfn_MSP430_GetFoundDevice)(uint8_t*, int32_t);
+typedef STATUS_T (WINAPI *pfn_MSP430_Run)(int32_t, int32_t);
+typedef STATUS_T (WINAPI *pfn_MSP430_EnableEnergyTrace)(const EnergyTraceSetup*, const EnergyTraceCallbacks*, EnergyTraceHandle*);
+typedef STATUS_T (WINAPI *pfn_MSP430_DisableEnergyTrace)(const EnergyTraceHandle);
+typedef STATUS_T (WINAPI *pfn_MSP430_ResetEnergyTrace)(const EnergyTraceHandle);
+typedef STATUS_T (WINAPI *pfn_MSP430_LoadDeviceDb)(const char*);
+
+static pfn_MSP430_Initialize        pMSP430_Initialize;
+static pfn_MSP430_Close             pMSP430_Close;
+static pfn_MSP430_VCC               pMSP430_VCC;
+static pfn_MSP430_OpenDevice        pMSP430_OpenDevice;
+static pfn_MSP430_GetFoundDevice    pMSP430_GetFoundDevice;
+static pfn_MSP430_Run               pMSP430_Run;
+static pfn_MSP430_EnableEnergyTrace pMSP430_EnableEnergyTrace;
+static pfn_MSP430_DisableEnergyTrace pMSP430_DisableEnergyTrace;
+static pfn_MSP430_ResetEnergyTrace  pMSP430_ResetEnergyTrace;
+static pfn_MSP430_LoadDeviceDb      pMSP430_LoadDeviceDb;
+
+/* Redirect calls to function pointers so the rest of the code is unchanged */
+#define MSP430_Initialize        pMSP430_Initialize
+#define MSP430_Close             pMSP430_Close
+#define MSP430_VCC               pMSP430_VCC
+#define MSP430_OpenDevice        pMSP430_OpenDevice
+#define MSP430_GetFoundDevice    pMSP430_GetFoundDevice
+#define MSP430_Run               pMSP430_Run
+#define MSP430_EnableEnergyTrace pMSP430_EnableEnergyTrace
+#define MSP430_DisableEnergyTrace pMSP430_DisableEnergyTrace
+#define MSP430_ResetEnergyTrace  pMSP430_ResetEnergyTrace
+#define MSP430_LoadDeviceDb      pMSP430_LoadDeviceDb
+
+static int LoadMSP430(void) {
+	HMODULE dll = LoadLibraryA("MSP430.DLL");
+	if (!dll) {
+		fprintf(stderr, "Error: Could not load MSP430.DLL (error %lu).\n"
+		                "Place MSP430.DLL in the same directory as this exe,\n"
+		                "or install TI MSP Debug Stack / Code Composer Studio.\n",
+		                (unsigned long)GetLastError());
+		return -1;
+	}
+
+	#define LOAD(name) do { \
+		p##name = (pfn_##name)GetProcAddress(dll, #name); \
+		if (!p##name) { \
+			fprintf(stderr, "Error: MSP430.DLL missing function: " #name "\n"); \
+			FreeLibrary(dll); \
+			return -1; \
+		} \
+	} while(0)
+
+	LOAD(MSP430_Initialize);
+	LOAD(MSP430_Close);
+	LOAD(MSP430_VCC);
+	LOAD(MSP430_OpenDevice);
+	LOAD(MSP430_GetFoundDevice);
+	LOAD(MSP430_Run);
+	LOAD(MSP430_EnableEnergyTrace);
+	LOAD(MSP430_DisableEnergyTrace);
+	LOAD(MSP430_ResetEnergyTrace);
+
+	#undef LOAD
+
+	/* LoadDeviceDb may not exist in older DLL versions */
+	pMSP430_LoadDeviceDb = (pfn_MSP430_LoadDeviceDb)GetProcAddress(dll, "MSP430_LoadDeviceDb");
+
+	return 0;
+}
+#endif /* _WIN32 */
 
 #ifdef _MSC_VER
 #pragma pack(push, 1)
@@ -67,15 +151,19 @@ int main(int argc, char *argv[]) {
 		usage(argv[0]);
 		return 1;
 	}
-	
-	
+
+#ifdef _WIN32
+	if (LoadMSP430() != 0)
+		return 1;
+#endif
+
 	STATUS_T status, secure = STATUS_OK;
 	char* portNumber;
 	int  version;
 	long  vcc = 3300;
 	union DEVICE_T device;
 	portNumber = "TIUSB";
-	
+
 	printf("#Initializing the interface: ");
 	status = MSP430_Initialize(portNumber, &version);
 	printf("#MSP430_Initialize(portNumber=%s, version=%d) returns %d\n", portNumber, version, status);
@@ -93,7 +181,10 @@ int main(int argc, char *argv[]) {
 
 
 	// 3. Open the device.
-	MSP430_LoadDeviceDb(NULL); //Required in more recent versions of tilib.
+#ifdef _WIN32
+	if (MSP430_LoadDeviceDb)
+#endif
+		MSP430_LoadDeviceDb(NULL); //Required in more recent versions of tilib.
 	printf("#Opening the device: ");
 	status = MSP430_OpenDevice("DEVICE_UNKNOWN", "", 0, 0, DEVICE_UNKNOWN);
 	printf("#MSP430_OpenDevice() returns %d\n", status);
@@ -117,8 +208,8 @@ int main(int argc, char *argv[]) {
 	printf("# device.vccMinOp: %d\n", device.vccMinOp);
 	printf("# device.vccMaxOp: %d\n", device.vccMaxOp);
 	printf("# device.hasTestVpp: %d\n", device.hasTestVpp);
-	
-	
+
+
 	EnergyTraceSetup ets = {  ET_PROFILING_ANALOG,                // Gives callbacks of with eventID 8
                       ET_PROFILING_1K,                   // N/A
                       ET_ALL,                             // N/A
@@ -133,19 +224,19 @@ int main(int argc, char *argv[]) {
 	MSP430_Run(FREE_RUN, 1);
 	status = MSP430_EnableEnergyTrace(&ets, &cbs, &ha);
 	printf("#MSP430_EnableEnergyTrace=%d\n", status);
-	
+
 	status = MSP430_ResetEnergyTrace(ha);
 	printf("#MSP430_ResetEnergyTrace=%d\n", status);
-	
+
 #ifdef _WIN32
 	Sleep(duration * 1000);
 #else
 	sleep(duration);
 #endif
-	
+
 	status = MSP430_DisableEnergyTrace(ha);
 	printf("#MSP430_DisableEnergyTrace=%d\n", status);
-	
+
 	printf("#Closing the interface: ");
 	status = MSP430_Close(0);
 	printf("#MSP430_Close(FALSE) returns %d\n", status);
