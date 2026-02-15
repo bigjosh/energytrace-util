@@ -19,29 +19,13 @@ jobs:
         with:
           arch: x64
 
-      - name: Clone MSP Debug Stack for headers
-        run: git clone --depth 1 https://github.com/AJenbo/mspds.git mspds-src
-        shell: bash
-
-      - name: Locate MSP430 headers
-        id: headers
-        run: |
-          $headerDir = Get-ChildItem -Path mspds-src -Recurse -Filter "MSP430.h" -File | Select-Object -First 1 -ExpandProperty DirectoryName
-          if (-not $headerDir) {
-            Write-Error "MSP430.h not found in mspds source"
-            exit 1
-          }
-          Write-Output "MSP430 headers found at: $headerDir"
-          echo "MSP430_INCLUDE_DIR=$headerDir" >> $env:GITHUB_OUTPUT
-        shell: pwsh
-
       - name: Generate import library from .def file
         run: lib /def:MSP430.def /out:MSP430.lib /machine:x64
         shell: cmd
 
       - name: Build with CMake (MSVC)
         run: |
-          cmake -B build -A x64 -DMSP430_INCLUDE_DIR="${{ steps.headers.outputs.MSP430_INCLUDE_DIR }}" -DMSP430_LIBRARY="${{ github.workspace }}\MSP430.lib"
+          cmake -B build -A x64 -DMSP430_LIBRARY="${{ github.workspace }}\MSP430.lib"
           cmake --build build --config Release
         shell: cmd
 
@@ -84,34 +68,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Clone MSP Debug Stack for headers
-        run: git clone --depth 1 https://github.com/AJenbo/mspds.git mspds-src
-
-      - name: Locate MSP430 headers
-        id: headers
-        run: |
-          HEADER_DIR=$(find mspds-src -name "MSP430.h" -printf '%h\n' | head -1)
-          if [ -z "$HEADER_DIR" ]; then
-            echo "MSP430.h not found in mspds source"
-            exit 1
-          fi
-          echo "MSP430 headers found at: $HEADER_DIR"
-          echo "MSP430_INCLUDE_DIR=$HEADER_DIR" >> "$GITHUB_OUTPUT"
-
       - name: Build with CMake
         run: |
-          cmake -B build \
-            -DMSP430_INCLUDE_DIR="${{ steps.headers.outputs.MSP430_INCLUDE_DIR }}"
+          cmake -B build
           cmake --build build
-        # Note: This will fail at link time without libmsp430.so installed,
+        # Will fail at link time without libmsp430.so installed,
         # but validates the source compiles correctly on Linux.
-        continue-on-error: true
-
-      - name: Build with Makefile (if libmsp430 is installed)
-        run: |
-          if [ -f /usr/include/libmsp430/MSP430.h ]; then
-            make
-          else
-            echo "libmsp430 not installed, skipping Makefile build"
-          fi
         continue-on-error: true
