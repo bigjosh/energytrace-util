@@ -1,5 +1,6 @@
 LIBRARY MSP430.dll
 EXPORTS
+    ; Undecorated names (used by x64 MSVC, MinGW, and GetProcAddress)
     MSP430_Initialize
     MSP430_VCC
     MSP430_LoadDeviceDb
@@ -11,3 +12,15 @@ EXPORTS
     MSP430_EnableEnergyTrace
     MSP430_ResetEnergyTrace
     MSP430_DisableEnergyTrace
+
+    ; Stdcall-decorated aliases for 32-bit MSVC (WINAPI/__stdcall appends @bytes)
+    MSP430_Initialize@8 = MSP430_Initialize
+    MSP430_VCC@4 = MSP430_VCC
+    MSP430_OpenDevice@20 = MSP430_OpenDevice
+    MSP430_GetFoundDevice@8 = MSP430_GetFoundDevice
+    MSP430_Run@8 = MSP430_Run
+    MSP430_Close@4 = MSP430_Close
+    MSP430_Configure@8 = MSP430_Configure
+    MSP430_EnableEnergyTrace@12 = MSP430_EnableEnergyTrace
+    MSP430_ResetEnergyTrace@4 = MSP430_ResetEnergyTrace
+    MSP430_DisableEnergyTrace@4 = MSP430_DisableEnergyTrace

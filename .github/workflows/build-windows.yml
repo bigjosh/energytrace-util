@@ -11,54 +11,78 @@ on:
 jobs:
   build-windows:
     runs-on: windows-latest
+    strategy:
+      matrix:
+        include:
+          - arch: x86
+            cmake_arch: Win32
+            lib_machine: x86
+          - arch: x64
+            cmake_arch: x64
+            lib_machine: x64
     steps:
       - uses: actions/checkout@v4
 
       - name: Set up MSVC developer environment
         uses: ilammy/msvc-dev-cmd@v1
         with:
-          arch: x86
+          arch: ${{ matrix.arch }}
 
       - name: Generate import library from .def file
-        run: lib /def:MSP430.def /out:MSP430.lib /machine:x86
+        run: lib /def:MSP430.def /out:MSP430.lib /machine:${{ matrix.lib_machine }}
         shell: cmd
 
       - name: Build with CMake (MSVC)
         run: |
-          cmake -B build -A Win32 -DMSP430_LIBRARY="${{ github.workspace }}\MSP430.lib"
+          cmake -B build -A ${{ matrix.cmake_arch }} -DMSP430_LIBRARY="${{ github.workspace }}\MSP430.lib"
           cmake --build build --config Release
         shell: cmd
 
       - name: Prepare release artifacts
         run: |
           mkdir release
-          copy build\Release\energytrace.exe release\
+          copy build\Release\energytrace.exe release\energytrace-${{ matrix.arch }}.exe
           copy README.md release\
         shell: cmd
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: energytrace-windows-x86
+          name: energytrace-windows-${{ matrix.arch }}
           path: release/
 
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build-windows
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
       - name: Create GitHub Release
-        if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            release/energytrace.exe
+            artifacts/energytrace-windows-x86/energytrace-x86.exe
+            artifacts/energytrace-windows-x64/energytrace-x64.exe
           body: |
-            ## energytrace for Windows (x86)
+            ## energytrace for Windows
+
+            Two builds are provided:
+            - **energytrace-x86.exe** — 32-bit, for use with 32-bit MSP430.DLL (most common, e.g. Code Composer Studio)
+            - **energytrace-x64.exe** — 64-bit, for use with 64-bit MSP430.DLL
 
             ### Requirements
             - **MSP430 Debug Stack (MSP430.DLL)** must be installed.
               Download from [TI's MSP Debug Stack](https://www.ti.com/tool/MSPDS) or install as part of Code Composer Studio.
-            - Place `MSP430.DLL` in the same directory as `energytrace.exe`, or ensure it is on your system PATH.
+            - Place `MSP430.DLL` in the same directory as the exe, or ensure it is on your system PATH.
+            - Use the exe that matches your MSP430.DLL architecture (32-bit or 64-bit).
 
             ### Usage
             ```
-            energytrace.exe <measurement duration in seconds>
+            energytrace-x86.exe <measurement duration in seconds>
             ```
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
