@@ -6,31 +6,13 @@ set(CMAKE_C_STANDARD 11)
 add_executable(energytrace energytrace.c)
 
 # MSP430 Debug Stack include directory
-# Users can set -DMSP430_INCLUDE_DIR=<path> to override
+# Headers are vendored in Inc/, but users can override with -DMSP430_INCLUDE_DIR=<path>
 if(NOT MSP430_INCLUDE_DIR)
-    if(WIN32)
-        # Common TI installation paths on Windows
-        find_path(MSP430_INCLUDE_DIR MSP430.h
-            PATHS
-            "C:/ti/msp430/MSP Debug Stack/include"
-            "C:/ti/ccs/ccs_base/DebugServer/drivers"
-            "$ENV{TI_MSPDS_DIR}/include"
-        )
-    else()
-        find_path(MSP430_INCLUDE_DIR MSP430.h
-            PATHS
-            /usr/include/libmsp430
-            /usr/local/include/libmsp430
-        )
-    endif()
+    set(MSP430_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/Inc")
 endif()
 
-if(MSP430_INCLUDE_DIR)
-    message(STATUS "MSP430 headers found at: ${MSP430_INCLUDE_DIR}")
-    target_include_directories(energytrace PRIVATE ${MSP430_INCLUDE_DIR})
-else()
-    message(FATAL_ERROR "MSP430 headers not found. Set -DMSP430_INCLUDE_DIR=<path>")
-endif()
+message(STATUS "MSP430 headers: ${MSP430_INCLUDE_DIR}")
+target_include_directories(energytrace PRIVATE ${MSP430_INCLUDE_DIR})
 
 # MSP430 library
 if(WIN32)
