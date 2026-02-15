@@ -4,10 +4,10 @@ SRC = $(TARGET).c
 CFLAGS = -I/usr/include/libmsp430 -lmsp430
 
 all: $(TARGET)
-$(TARGET): $(SRC) 
+$(TARGET): $(SRC)
 	gcc $(CFLAGS) -o $@ $<
 clean:
-	rm -f $(TARGET)
+	rm -f $(TARGET) $(TARGET).exe
 
 run: all
 	./energytrace 5
@@ -15,4 +15,9 @@ run: all
 install: all
 	install -t /usr/local/bin $(TARGET)
 
-
+# Cross-compile for Windows (requires mingw-w64 and MSP430 headers)
+# Usage: make windows MSP430_WIN_INCLUDE=/path/to/msp430/include
+MINGW_CC = x86_64-w64-mingw32-gcc
+MSP430_WIN_INCLUDE ?= /usr/include/libmsp430
+windows: $(SRC) MSP430.def
+	$(MINGW_CC) -I$(MSP430_WIN_INCLUDE) -o $(TARGET).exe $< MSP430.def

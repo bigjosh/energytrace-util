@@ -1,13 +1,30 @@
 #include <stdio.h>
-#include <unistd.h>
 #include <stdlib.h>
 #include <stdbool.h>
 #include <inttypes.h>
 #include <assert.h>
+
+#ifdef _WIN32
+#include <windows.h>
+#else
+#include <unistd.h>
+#endif
+
 #include <MSP430.h>
 #include <MSP430_EnergyTrace.h>
 #include <MSP430_Debug.h>
 
+#ifdef _MSC_VER
+#pragma pack(push, 1)
+typedef struct {
+	uint8_t id;
+	uint64_t timestamp:56;
+	uint32_t current;
+	uint16_t voltage;
+	uint32_t energy;
+} event_t;
+#pragma pack(pop)
+#else
 typedef struct __attribute__((packed))  {
 	uint8_t id;
 	uint64_t timestamp:56;
@@ -15,6 +32,7 @@ typedef struct __attribute__((packed))  {
 	uint16_t voltage;
 	uint32_t energy;
 } event_t;
+#endif
 
 void push_cb(void* pContext, const uint8_t* pBuffer, uint32_t nBufferSize) {
 	assert(sizeof(event_t)==18);
@@ -119,7 +137,11 @@ int main(int argc, char *argv[]) {
 	status = MSP430_ResetEnergyTrace(ha);
 	printf("#MSP430_ResetEnergyTrace=%d\n", status);
 	
+#ifdef _WIN32
+	Sleep(duration * 1000);
+#else
 	sleep(duration);
+#endif
 	
 	status = MSP430_DisableEnergyTrace(ha);
 	printf("#MSP430_DisableEnergyTrace=%d\n", status);
