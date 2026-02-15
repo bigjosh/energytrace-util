@@ -3,6 +3,7 @@
 #include <stdbool.h>
 #include <inttypes.h>
 #include <assert.h>
+#include <string.h>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -36,6 +37,8 @@ typedef STATUS_T (WINAPI *pfn_MSP430_EnableEnergyTrace)(const EnergyTraceSetup*,
 typedef STATUS_T (WINAPI *pfn_MSP430_DisableEnergyTrace)(const EnergyTraceHandle);
 typedef STATUS_T (WINAPI *pfn_MSP430_ResetEnergyTrace)(const EnergyTraceHandle);
 typedef STATUS_T (WINAPI *pfn_MSP430_LoadDeviceDb)(const char*);
+typedef int32_t  (WINAPI *pfn_MSP430_Error_Number)(void);
+typedef const char* (WINAPI *pfn_MSP430_Error_String)(int32_t);
 
 static pfn_MSP430_Initialize        pMSP430_Initialize;
 static pfn_MSP430_Close             pMSP430_Close;
@@ -47,6 +50,8 @@ static pfn_MSP430_EnableEnergyTrace pMSP430_EnableEnergyTrace;
 static pfn_MSP430_DisableEnergyTrace pMSP430_DisableEnergyTrace;
 static pfn_MSP430_ResetEnergyTrace  pMSP430_ResetEnergyTrace;
 static pfn_MSP430_LoadDeviceDb      pMSP430_LoadDeviceDb;
+static pfn_MSP430_Error_Number      pMSP430_Error_Number;
+static pfn_MSP430_Error_String      pMSP430_Error_String;
 
 /* Redirect calls to function pointers so the rest of the code is unchanged */
 #define MSP430_Initialize        pMSP430_Initialize
@@ -59,6 +64,8 @@ static pfn_MSP430_LoadDeviceDb      pMSP430_LoadDeviceDb;
 #define MSP430_DisableEnergyTrace pMSP430_DisableEnergyTrace
 #define MSP430_ResetEnergyTrace  pMSP430_ResetEnergyTrace
 #define MSP430_LoadDeviceDb      pMSP430_LoadDeviceDb
+#define MSP430_Error_Number      pMSP430_Error_Number
+#define MSP430_Error_String      pMSP430_Error_String
 
 static int LoadMSP430(void) {
 	HMODULE dll = LoadLibraryA("MSP430.DLL");
@@ -88,6 +95,8 @@ static int LoadMSP430(void) {
 	LOAD(MSP430_EnableEnergyTrace);
 	LOAD(MSP430_DisableEnergyTrace);
 	LOAD(MSP430_ResetEnergyTrace);
+	LOAD(MSP430_Error_Number);
+	LOAD(MSP430_Error_String);
 
 	#undef LOAD
 
@@ -138,7 +147,10 @@ void error_cb(void* pContext, const char* pszErrorText) {
 }
 
 void usage(char *a0) {
-	printf("usage: %s <measurement duration in seconds>\n", a0);
+	printf("usage: %s <seconds> [port]\n", a0);
+	printf("  seconds  Measurement duration\n");
+	printf("  port     Interface port (default: TIUSB)\n");
+	printf("           Examples: TIUSB, USB, COM3, COM4\n");
 }
 
 int main(int argc, char *argv[]) {
@@ -162,12 +174,18 @@ int main(int argc, char *argv[]) {
 	int  version;
 	long  vcc = 3300;
 	union DEVICE_T device;
-	portNumber = "TIUSB";
+
+	portNumber = (argc >= 3) ? argv[2] : "TIUSB";
 
 	printf("#Initializing the interface: ");
 	status = MSP430_Initialize(portNumber, &version);
 	printf("#MSP430_Initialize(portNumber=%s, version=%d) returns %d\n", portNumber, version, status);
 	if(status != STATUS_OK) {
+		fprintf(stderr, "Error: %s\n", MSP430_Error_String(MSP430_Error_Number()));
+		if(version == -1 || version == -3) {
+			fprintf(stderr, "Note: DLL/firmware version mismatch (version=%d).\n"
+			                "Consider updating the MSP Debug Stack or FET firmware.\n", version);
+		}
 		return 1;
 	}
 
@@ -189,6 +207,7 @@ int main(int argc, char *argv[]) {
 	status = MSP430_OpenDevice("DEVICE_UNKNOWN", "", 0, 0, DEVICE_UNKNOWN);
 	printf("#MSP430_OpenDevice() returns %d\n", status);
 	if(status != STATUS_OK) {
+		fprintf(stderr, "Error: %s\n", MSP430_Error_String(MSP430_Error_Number()));
 		return 1;
 	}
 
