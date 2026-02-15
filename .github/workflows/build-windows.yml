@@ -17,15 +17,15 @@ jobs:
       - name: Set up MSVC developer environment
         uses: ilammy/msvc-dev-cmd@v1
         with:
-          arch: x64
+          arch: x86
 
       - name: Generate import library from .def file
-        run: lib /def:MSP430.def /out:MSP430.lib /machine:x64
+        run: lib /def:MSP430.def /out:MSP430.lib /machine:x86
         shell: cmd
 
       - name: Build with CMake (MSVC)
         run: |
-          cmake -B build -A x64 -DMSP430_LIBRARY="${{ github.workspace }}\MSP430.lib"
+          cmake -B build -A Win32 -DMSP430_LIBRARY="${{ github.workspace }}\MSP430.lib"
           cmake --build build --config Release
         shell: cmd
 
@@ -39,7 +39,7 @@ jobs:
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: energytrace-windows-x64
+          name: energytrace-windows-x86
           path: release/
 
       - name: Create GitHub Release
@@ -49,7 +49,7 @@ jobs:
           files: |
             release/energytrace.exe
           body: |
-            ## energytrace for Windows (x64)
+            ## energytrace for Windows (x86)
 
             ### Requirements
             - **MSP430 Debug Stack (MSP430.DLL)** must be installed.

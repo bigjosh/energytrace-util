@@ -17,7 +17,7 @@ install: all
 
 # Cross-compile for Windows (requires mingw-w64 and MSP430 headers)
 # Usage: make windows MSP430_WIN_INCLUDE=/path/to/msp430/include
-MINGW_CC = x86_64-w64-mingw32-gcc
+MINGW_CC = i686-w64-mingw32-gcc
 MSP430_WIN_INCLUDE ?= Inc
 windows: $(SRC) MSP430.def
 	$(MINGW_CC) -I$(MSP430_WIN_INCLUDE) -o $(TARGET).exe $< MSP430.def
