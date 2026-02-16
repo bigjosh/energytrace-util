@@ -107,38 +107,44 @@ static int LoadMSP430(void) {
 }
 #endif /* _WIN32 */
 
-#ifdef _MSC_VER
-#pragma pack(push, 1)
-typedef struct {
-	uint8_t id;
-	uint64_t timestamp:56;
-	uint32_t current;
-	uint16_t voltage;
-	uint32_t energy;
-} event_t;
-#pragma pack(pop)
-#else
-typedef struct __attribute__((packed))  {
-	uint8_t id;
-	uint64_t timestamp:56;
-	uint32_t current;
-	uint16_t voltage;
-	uint32_t energy;
-} event_t;
-#endif
+/*
+ * Event record wire format (18 bytes, little-endian):
+ *   [1B eventID][7B timestamp µs][4B current nA][2B voltage mV][4B energy µWs]
+ *
+ * We unpack manually to avoid compiler-dependent bitfield layout issues.
+ */
+#define EVENT_SIZE 18
+
+static uint64_t read_le56(const uint8_t *p) {
+	return  (uint64_t)p[0]       | (uint64_t)p[1] << 8  |
+	        (uint64_t)p[2] << 16 | (uint64_t)p[3] << 24 |
+	        (uint64_t)p[4] << 32 | (uint64_t)p[5] << 40 |
+	        (uint64_t)p[6] << 48;
+}
+
+static uint32_t read_le32(const uint8_t *p) {
+	return (uint32_t)p[0] | (uint32_t)p[1] << 8 |
+	       (uint32_t)p[2] << 16 | (uint32_t)p[3] << 24;
+}
+
+static uint16_t read_le16(const uint8_t *p) {
+	return (uint16_t)p[0] | (uint16_t)p[1] << 8;
+}
 
 void push_cb(void* pContext, const uint8_t* pBuffer, uint32_t nBufferSize) {
-	assert(sizeof(event_t)==18);
-	assert(nBufferSize%sizeof(event_t)==0);
-	uint32_t n=nBufferSize/sizeof(event_t);
-	event_t *ev = (void*)pBuffer;
-	uint32_t i = 0;
-	while(i < n) {
-		if(ev->id == 8) {
-			printf("%15.10f,%14.10f,%7.3f,%15.10f\n",ev->timestamp/1e6, ev->current/1e9, ev->voltage/1e3, ev->energy/1e7);
-		}
-		ev++;
-		i++;
+	assert(nBufferSize % EVENT_SIZE == 0);
+	uint32_t n = nBufferSize / EVENT_SIZE;
+	const uint8_t *p = pBuffer;
+	for (uint32_t i = 0; i < n; i++, p += EVENT_SIZE) {
+		uint8_t  id        = p[0];
+		if (id != 8) continue;
+		uint64_t timestamp = read_le56(p + 1);  /* µs */
+		uint32_t current   = read_le32(p + 8);  /* nA */
+		uint16_t voltage   = read_le16(p + 12); /* mV */
+		uint32_t energy    = read_le32(p + 14); /* µWs */
+		printf("%15.10f,%14.10f,%7.3f,%15.10f\n",
+		       timestamp / 1e6, current / 1e9,
+		       voltage / 1e3, energy / 1e7);
 	}
 }
 
