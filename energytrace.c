@@ -2,7 +2,6 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <inttypes.h>
-#include <assert.h>
 #include <string.h>
 
 #ifdef _WIN32
@@ -107,38 +106,50 @@ static int LoadMSP430(void) {
 }
 #endif /* _WIN32 */
 
-#ifdef _MSC_VER
-#pragma pack(push, 1)
-typedef struct {
-	uint8_t id;
-	uint64_t timestamp:56;
-	uint32_t current;
-	uint16_t voltage;
-	uint32_t energy;
-} event_t;
-#pragma pack(pop)
-#else
-typedef struct __attribute__((packed))  {
-	uint8_t id;
-	uint64_t timestamp:56;
-	uint32_t current;
-	uint16_t voltage;
-	uint32_t energy;
-} event_t;
-#endif
+enum { ET_RECORD_SIZE = 18 };
+
+static uint16_t read_le_u16(const uint8_t* p) {
+	return (uint16_t)p[0]
+	     | ((uint16_t)p[1] << 8);
+}
+
+static uint32_t read_le_u32(const uint8_t* p) {
+	return (uint32_t)p[0]
+	     | ((uint32_t)p[1] << 8)
+	     | ((uint32_t)p[2] << 16)
+	     | ((uint32_t)p[3] << 24);
+}
+
+static uint64_t read_le_u56(const uint8_t* p) {
+	return (uint64_t)p[0]
+	     | ((uint64_t)p[1] << 8)
+	     | ((uint64_t)p[2] << 16)
+	     | ((uint64_t)p[3] << 24)
+	     | ((uint64_t)p[4] << 32)
+	     | ((uint64_t)p[5] << 40)
+	     | ((uint64_t)p[6] << 48);
+}
 
 void push_cb(void* pContext, const uint8_t* pBuffer, uint32_t nBufferSize) {
-	assert(sizeof(event_t)==18);
-	assert(nBufferSize%sizeof(event_t)==0);
-	uint32_t n=nBufferSize/sizeof(event_t);
-	event_t *ev = (void*)pBuffer;
-	uint32_t i = 0;
-	while(i < n) {
-		if(ev->id == 8) {
-			printf("%20.20u,%10.10u,%10.10u,%10.10u\n",ev->timestamp, ev->current, ev->voltage, ev->energy);
+	if (nBufferSize % ET_RECORD_SIZE != 0) {
+		fprintf(stderr, "Error: Unexpected EnergyTrace record length %u bytes.\n", nBufferSize);
+		return;
+	}
+
+	uint32_t n = nBufferSize / ET_RECORD_SIZE;
+	for (uint32_t i = 0; i < n; i++) {
+		const uint8_t* ev = pBuffer + (i * ET_RECORD_SIZE);
+		if (ev[0] == ET_EVENT_CURR_VOLT_ENERGY) {
+			uint64_t timestamp = read_le_u56(ev + 1);
+			uint32_t current = read_le_u32(ev + 8);
+			uint32_t voltage = read_le_u16(ev + 12);
+			uint32_t energy = read_le_u32(ev + 14);
+			printf("%020" PRIu64 ",%010" PRIu32 ",%010" PRIu32 ",%010" PRIu32 "\n",
+			       timestamp,
+			       current,
+			       voltage,
+			       energy);
 		}
-		ev++;
-		i++;
 	}
 }
 
